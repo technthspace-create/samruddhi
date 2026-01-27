@@ -2,6 +2,8 @@
 Samruddhi Enterprises - SS Steel Pipe Cutting Instruction System
 All lengths in millimeters. "Cut 7 × 5000 mm → 65000 mm remaining." One raw pipe = one length (mm).
 Uses db.py for storage: SQLite locally, Turso on Vercel when env vars are set.
+
+Extended: Multi-size cutting plan (FFD bin packing) with standard raw length 3600 mm.
 """
 
 import os
@@ -11,11 +13,79 @@ import db
 
 app = Flask(__name__)
 
+# Standard raw pipe length for multi-size mode (mm). Fixed, no user input.
+STANDARD_RAW_LENGTH_MM = 3600.0
+
+# Scrap below this length is not saved to inventory. Only pieces >= this are stored.
+SCRAP_SAVE_THRESHOLD_MM = 100.0
+
 # Not used here; db module handles storage
 get_leftovers_sorted = db.get_leftovers_sorted
 delete_leftover = db.delete_leftover
 insert_leftover = db.insert_leftover
 init_db = db.init_db
+
+
+def run_multi_size_plan(cut_requirements):
+    """
+    Multi-size cutting plan using First-Fit Decreasing (FFD) bin packing.
+    cut_requirements: list of (length_mm, quantity) e.g. [(243, 3), (2342, 5), (1500, 2)]
+    Raw pipe length is fixed at STANDARD_RAW_LENGTH_MM (3600 mm).
+    Returns list of { pipe_number, cuts, used, scrap } — no pipe exceeds 3600 mm.
+    """
+    if not cut_requirements:
+        return {"pipes": [], "total_pipes": 0, "total_used": 0, "total_scrap": 0}
+
+    # 1. Expand to flat list and 2. sort descending (FFD)
+    flat = []
+    for length_mm, qty in cut_requirements:
+        L = round(float(length_mm), 2)
+        n = int(qty)
+        if L <= 0 or n <= 0:
+            continue
+        flat.extend([L] * n)
+    flat.sort(reverse=True)
+
+    if not flat:
+        return {"pipes": [], "total_pipes": 0, "total_used": 0, "total_scrap": 0}
+
+    # 3. First-Fit: try existing pipe, else new pipe (each pipe = 3600 mm available)
+    pipes = []  # list of {"remaining": float, "cuts": list}
+
+    for cut in flat:
+        placed = False
+        for p in pipes:
+            if p["remaining"] >= cut:
+                p["cuts"].append(cut)
+                p["remaining"] = round(p["remaining"] - cut, 2)
+                placed = True
+                break
+        if not placed:
+            pipes.append({"remaining": round(STANDARD_RAW_LENGTH_MM - cut, 2), "cuts": [cut]})
+
+    # 4. Build output: pipe_number, cuts, used, scrap
+    out = []
+    total_used = 0
+    total_scrap = 0
+    for i, p in enumerate(pipes):
+        used = round(sum(p["cuts"]), 2)
+        scrap = round(p["remaining"], 2)
+        total_used += used
+        total_scrap += scrap
+        out.append({
+            "pipe_number": i + 1,
+            "cuts": p["cuts"],
+            "used": used,
+            "scrap": scrap,
+        })
+
+    return {
+        "pipes": out,
+        "total_pipes": len(out),
+        "total_used": round(total_used, 2),
+        "total_scrap": round(total_scrap, 2),
+        "raw_length": STANDARD_RAW_LENGTH_MM,
+    }
 
 
 def run_cutting_plan(raw_material_length, cut_length, quantity_required):
@@ -78,7 +148,7 @@ def run_cutting_plan(raw_material_length, cut_length, quantity_required):
                     "cut_length": cut_length,
                     "remaining": remaining,
                 })
-            if remaining > 0:
+            if remaining >= SCRAP_SAVE_THRESHOLD_MM:
                 scrap_to_save.append(remaining)
             if current_leftover_id is not None:
                 used_leftover_ids.append(current_leftover_id)
@@ -99,7 +169,7 @@ def run_cutting_plan(raw_material_length, cut_length, quantity_required):
             "cut_length": cut_length,
             "remaining": remaining,
         })
-        if remaining > 0:
+        if remaining >= SCRAP_SAVE_THRESHOLD_MM:
             scrap_to_save.append(remaining)
         if current_leftover_id is not None:
             used_leftover_ids.append(current_leftover_id)
@@ -132,16 +202,40 @@ def run_cutting_plan(raw_material_length, cut_length, quantity_required):
 def index():
     init_db()  # ensure table exists (needed on Vercel; no-op if already exists)
     result = None
-    if request.method == "POST":
-        try:
-            raw_length = float(request.form.get("raw_length", 0))
-            cut_length = float(request.form.get("cut_length", 0))
-            quantity_required = int(request.form.get("quantity_required", 0))
-        except (TypeError, ValueError):
-            raw_length = cut_length = quantity_required = 0
+    multi_result = None
 
-        if raw_length > 0 and cut_length > 0 and quantity_required > 0:
-            result = run_cutting_plan(raw_length, cut_length, quantity_required)
+    if request.method == "POST":
+        if request.form.get("multi_submit"):
+            # Multi-size cutting plan (FFD, 3600 mm standard raw)
+            cut_lengths = request.form.getlist("multi_cut_length")
+            quantities = request.form.getlist("multi_quantity")
+            pairs = []
+            for c, q in zip(cut_lengths, quantities):
+                try:
+                    cv, qv = round(float(c), 2), int(q)
+                    if cv > 0 and qv > 0:
+                        pairs.append((cv, qv))
+                except (TypeError, ValueError):
+                    continue
+            if pairs:
+                multi_result = run_multi_size_plan(pairs)
+                # Multi-size scraps: save to database only if >= 100 mm; do not save if under 100 mm
+                if multi_result and multi_result.get("pipes"):
+                    for p in multi_result["pipes"]:
+                        scrap = p.get("scrap", 0)
+                        if scrap >= SCRAP_SAVE_THRESHOLD_MM:
+                            insert_leftover(scrap)
+        else:
+            # Existing single-size plan
+            try:
+                raw_length = float(request.form.get("raw_length", 0))
+                cut_length = float(request.form.get("cut_length", 0))
+                quantity_required = int(request.form.get("quantity_required", 0))
+            except (TypeError, ValueError):
+                raw_length = cut_length = quantity_required = 0
+
+            if raw_length > 0 and cut_length > 0 and quantity_required > 0:
+                result = run_cutting_plan(raw_length, cut_length, quantity_required)
 
     # Prefill form from query (e.g. "Use 65000 mm" link: /?raw_length=65000)
     prefill = {
@@ -151,11 +245,18 @@ def index():
     }
 
     inventory = get_leftovers_sorted()
+    # Leftovers >= 100 mm: show as suggestion for next plan (fits requirements <= that size)
+    inventory_suggestions = [r for r in inventory if float(r.get("length", 0)) >= SCRAP_SAVE_THRESHOLD_MM]
+
     return render_template(
         "index.html",
         result=result,
+        multi_result=multi_result,
         inventory=inventory,
+        inventory_suggestions=inventory_suggestions,
         prefill=prefill,
+        standard_raw_mm=STANDARD_RAW_LENGTH_MM,
+        scrap_threshold_mm=SCRAP_SAVE_THRESHOLD_MM,
     )
 
 

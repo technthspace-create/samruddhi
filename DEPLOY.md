@@ -14,9 +14,9 @@ Vercel's serverless environment doesn't keep files between requests, so the app 
 
 3. Create a database:
    ```bash
-   turso db create samruddhi --region nrt
+   turso db create samruddhi --location nrt
    ```
-   (Use any region near you: `nrt` = Tokyo, `iad` = Virginia, etc.)
+   (Use `--location` with a location ID, e.g. `nrt` = Tokyo, `iad` = Virginia. Omit the flag to use the closest location.)
 
 4. Get the database URL and create an auth token:
    ```bash

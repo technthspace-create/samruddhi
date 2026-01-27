@@ -13,60 +13,53 @@
   </header>
 
   <main>
-    <section class="card form-card">
-      <h2>Raw material &amp; cuts</h2>
-      <form method="post" action="/">
-        <div class="field">
-          <label for="raw_length">Raw pipe length (mm) — one pipe</label>
-          <input type="number" id="raw_length" name="raw_length" step="0.01" min="0.01" required placeholder="e.g. 100000" value="{{ prefill.raw_length }}">
-        </div>
-        <div class="field">
-          <label for="cut_length">Cut length per piece (mm)</label>
-          <input type="number" id="cut_length" name="cut_length" step="0.01" min="0.01" required placeholder="e.g. 5000" value="{{ prefill.cut_length }}">
-        </div>
-        <div class="field">
-          <label for="quantity_required">Number of pieces</label>
-          <input type="number" id="quantity_required" name="quantity_required" min="1" required placeholder="e.g. 7" value="{{ prefill.quantity_required }}">
-        </div>
-        <button type="submit">Get cutting plan</button>
-      </form>
-
-      {% if result and result.suggested_raw %}
-      <div class="add-remaining">
-        <p class="add-remaining-label">{{ "%.2f"|format(result.suggested_raw) }} mm remaining from last run.</p>
-        <a href="{{ url_for('index', raw_length=result.suggested_raw) }}" class="btn-use-remaining">Use {{ "%.2f"|format(result.suggested_raw) }} mm for next plan</a>
-      </div>
-      {% endif %}
-    </section>
-
-    {% if result %}
-    <section class="card summary-card">
-      <h2>Summary</h2>
-      <ul class="summary-list">
-        <li><strong>Pieces produced:</strong> {{ result.pieces_produced }}</li>
-        <li><strong>Material used:</strong> {{ "%.2f"|format(result.material_used) }} mm</li>
-        <li><strong>Scrap saved to inventory:</strong> {{ ((result.scrap_saved_list|sum) if result.scrap_saved_list else 0)|round(2) }} mm {% if result.scrap_saved_list %}({{ result.scrap_saved_list|length }} piece{{ 's' if result.scrap_saved_list|length != 1 else '' }}){% endif %}</li>
-        <li><strong>Leftover reused:</strong> {{ 'Yes' if result.used_leftover else 'No' }}</li>
-      </ul>
-    </section>
-
-    <section class="card plan-card">
-      <h2>How to cut</h2>
-      {% if result.segments %}
-      <div class="plan-segments">
-        {% for seg in result.segments %}
-        <div class="segment">
-          <div class="segment-source">{{ seg.source }}</div>
-          <div class="segment-instruction">
-            At <strong>{{ "%.2f"|format(seg.cut_length) }} mm</strong>, cut <strong>{{ seg.pieces }}</strong> piece{{ 's' if seg.pieces != 1 else '' }}.
+    <section class="card multi-form-card">
+      <h2>Multi-size cutting plan</h2>
+      <p class="multi-intro">Standard raw pipe: <strong>{{ standard_raw_mm|int }} mm</strong>. Enter cut sizes and quantities. Use + to add more rows.</p>
+      <form method="post" action="/" class="multi-form" id="multi-form">
+        <input type="hidden" name="multi_submit" value="1">
+        <div class="multi-rows" id="multi-rows">
+          <div class="multi-row multi-row-header">
+            <span class="multi-col">Cut length (mm)</span>
+            <span class="multi-col">Quantity</span>
           </div>
-          <div class="segment-remaining">{{ "%.2f"|format(seg.remaining) }} mm remaining</div>
+          <div class="multi-row"><input type="number" name="multi_cut_length" step="0.01" min="0" placeholder="e.g. 243" class="multi-input"><input type="number" name="multi_quantity" min="0" placeholder="0" class="multi-input"></div>
+          <div class="multi-row"><input type="number" name="multi_cut_length" step="0.01" min="0" placeholder="e.g. 2342" class="multi-input"><input type="number" name="multi_quantity" min="0" placeholder="0" class="multi-input"></div>
+          <div class="multi-row"><input type="number" name="multi_cut_length" step="0.01" min="0" placeholder="e.g. 1500" class="multi-input"><input type="number" name="multi_quantity" min="0" placeholder="0" class="multi-input"></div>
+        </div>
+        <div class="multi-form-actions">
+          <button type="button" class="btn-add-row" id="btn-add-row" title="Add another requirement">+ Add row</button>
+          <button type="submit" class="btn-multi">Generate cutting plan</button>
+        </div>
+      </form>
+    </section>
+
+    {% if multi_result and multi_result.pipes %}
+    <section class="card multi-result-card">
+      <h2>Multi-size result</h2>
+      <p class="multi-summary">Pipes needed: <strong>{{ multi_result.total_pipes }}</strong> · Used: <strong>{{ "%.2f"|format(multi_result.total_used) }} mm</strong> · Total scrap: <strong>{{ "%.2f"|format(multi_result.total_scrap) }} mm</strong></p>
+      <p class="multi-scrap-note">Scrap ≥ {{ scrap_threshold_mm|int }} mm is saved to inventory for future use; smaller pieces are not saved.</p>
+      <div class="multi-pipes">
+        {% for p in multi_result.pipes %}
+        <div class="multi-pipe">
+          <div class="multi-pipe-title">Raw pipe {{ p.pipe_number }} ({{ multi_result.raw_length|int }} mm)</div>
+          <div class="multi-pipe-cuts">{% for c in p.cuts %}{{ "%.2f"|format(c) }}{% if not loop.last %} + {% endif %}{% endfor %} = {{ "%.2f"|format(p.used) }} mm</div>
+          <div class="multi-pipe-scrap">Scrap: {{ "%.2f"|format(p.scrap) }} mm</div>
         </div>
         {% endfor %}
       </div>
-      {% else %}
-      <p class="empty">No cuts — cut length exceeds available material or quantity is zero.</p>
-      {% endif %}
+    </section>
+    {% endif %}
+
+    {% if inventory_suggestions %}
+    <section class="card suggestion-card">
+      <h2>Suggestion for next requirement</h2>
+      <p class="suggestion-intro">Pieces in inventory that are {{ scrap_threshold_mm|int }} mm or longer can be used in a future plan. Add a requirement with cut length ≤ the piece size:</p>
+      <ul class="suggestion-list">
+        {% for row in inventory_suggestions %}
+        <li><strong>{{ "%.2f"|format(row.length) }} mm</strong> — use for requirements ≤ {{ "%.2f"|format(row.length) }} mm</li>
+        {% endfor %}
+      </ul>
     </section>
     {% endif %}
 
@@ -97,5 +90,20 @@
       {% endif %}
     </section>
   </main>
+  <script>
+    (function() {
+      var btn = document.getElementById('btn-add-row');
+      var container = document.getElementById('multi-rows');
+      if (!btn || !container) return;
+      btn.addEventListener('click', function() {
+        var rows = container.querySelectorAll('.multi-row:not(.multi-row-header)');
+        var last = rows[rows.length - 1];
+        if (!last) return;
+        var clone = last.cloneNode(true);
+        clone.querySelectorAll('input').forEach(function(inp) { inp.value = ''; });
+        container.appendChild(clone);
+      });
+    })();
+  </script>
 </body>
 </html>
