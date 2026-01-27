@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Samruddhi Enterprises — Cutting Plan</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <header>
+    <h1>Samruddhi Enterprises</h1>
+    <p>SS Steel Pipe Cutting</p>
+  </header>
+
+  <main>
+    <section class="card form-card">
+      <h2>Raw material &amp; cuts</h2>
+      <form method="post" action="/">
+        <div class="field">
+          <label for="raw_length">Raw pipe length (mm) — one pipe</label>
+          <input type="number" id="raw_length" name="raw_length" step="0.01" min="0.01" required placeholder="e.g. 100000" value="{{ prefill.raw_length }}">
+        </div>
+        <div class="field">
+          <label for="cut_length">Cut length per piece (mm)</label>
+          <input type="number" id="cut_length" name="cut_length" step="0.01" min="0.01" required placeholder="e.g. 5000" value="{{ prefill.cut_length }}">
+        </div>
+        <div class="field">
+          <label for="quantity_required">Number of pieces</label>
+          <input type="number" id="quantity_required" name="quantity_required" min="1" required placeholder="e.g. 7" value="{{ prefill.quantity_required }}">
+        </div>
+        <button type="submit">Get cutting plan</button>
+      </form>
+
+      {% if result and result.suggested_raw %}
+      <div class="add-remaining">
+        <p class="add-remaining-label">{{ "%.2f"|format(result.suggested_raw) }} mm remaining from last run.</p>
+        <a href="{{ url_for('index', raw_length=result.suggested_raw) }}" class="btn-use-remaining">Use {{ "%.2f"|format(result.suggested_raw) }} mm for next plan</a>
+      </div>
+      {% endif %}
+    </section>
+
+    {% if result %}
+    <section class="card summary-card">
+      <h2>Summary</h2>
+      <ul class="summary-list">
+        <li><strong>Pieces produced:</strong> {{ result.pieces_produced }}</li>
+        <li><strong>Material used:</strong> {{ "%.2f"|format(result.material_used) }} mm</li>
+        <li><strong>Scrap saved to inventory:</strong> {{ ((result.scrap_saved_list|sum) if result.scrap_saved_list else 0)|round(2) }} mm {% if result.scrap_saved_list %}({{ result.scrap_saved_list|length }} piece{{ 's' if result.scrap_saved_list|length != 1 else '' }}){% endif %}</li>
+        <li><strong>Leftover reused:</strong> {{ 'Yes' if result.used_leftover else 'No' }}</li>
+      </ul>
+    </section>
+
+    <section class="card plan-card">
+      <h2>How to cut</h2>
+      {% if result.segments %}
+      <div class="plan-segments">
+        {% for seg in result.segments %}
+        <div class="segment">
+          <div class="segment-source">{{ seg.source }}</div>
+          <div class="segment-instruction">
+            At <strong>{{ "%.2f"|format(seg.cut_length) }} mm</strong>, cut <strong>{{ seg.pieces }}</strong> piece{{ 's' if seg.pieces != 1 else '' }}.
+          </div>
+          <div class="segment-remaining">{{ "%.2f"|format(seg.remaining) }} mm remaining</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}
+      <p class="empty">No cuts — cut length exceeds available material or quantity is zero.</p>
+      {% endif %}
+    </section>
+    {% endif %}
+
+    <section class="card inventory-card">
+      <h2>Leftover inventory</h2>
+      {% if inventory %}
+      <table class="inventory-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Length (mm)</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in inventory %}
+          <tr>
+            <td>{{ row.id }}</td>
+            <td>{{ "%.2f"|format(row.length) }}</td>
+            <td>{{ row.created_at[:19] if row.created_at else '—' }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      <p class="inventory-summary">Total: {{ inventory|length }} piece{{ 's' if inventory|length != 1 else '' }} · {{ "%.2f"|format(inventory|sum(attribute='length')) }} mm</p>
+      {% else %}
+      <p class="empty">No leftover material.</p>
+      {% endif %}
+    </section>
+  </main>
+</body>
+</html>
