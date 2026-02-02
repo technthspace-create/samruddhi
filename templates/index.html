@@ -39,11 +39,14 @@
       <h2>Multi-size result</h2>
       <p class="multi-summary">Pipes needed: <strong>{{ multi_result.total_pipes }}</strong> · Used (incl. kerf): <strong>{{ "%.2f"|format(multi_result.total_used) }} mm</strong> · Kerf loss: <strong>{{ "%.2f"|format(multi_result.total_kerf) }} mm</strong> · Total scrap: <strong>{{ "%.2f"|format(multi_result.total_scrap) }} mm</strong></p>
       <p class="multi-scrap-note">Scrap ≥ {{ scrap_threshold_mm|int }} mm is saved to inventory for future use; smaller pieces are not saved.</p>
+      {% if multi_result.last_pipe_over_limit %}
+      <p class="multi-last-pipe-warning">Last pipe has {{ "%.2f"|format(multi_result.pipes[-1].scrap) }} mm scrap (max 75 mm). Use one more raw pipe and re-run with the same requirements to meet the rule.</p>
+      {% endif %}
       <div class="multi-pipes">
         {% for p in multi_result.pipes %}
         <div class="multi-pipe">
-          <div class="multi-pipe-title">Raw pipe {{ p.pipe_number }} ({{ multi_result.raw_length|int }} mm)</div>
-          <div class="multi-pipe-cuts">Cuts: {% for c in p.cuts %}{{ "%.2f"|format(c) }}{% if not loop.last %} + {% endif %}{% endfor %}</div>
+          <div class="multi-pipe-title">Pipe {{ p.pipe_number }}: {{ p.pipe_label }}</div>
+          <div class="multi-pipe-cuts">Cuts: {% if p.cuts %}{% for c in p.cuts %}{{ "%.2f"|format(c) }}{% if not loop.last %} + {% endif %}{% endfor %}{% else %}— (none; use next pipe){% endif %}</div>
           <div class="multi-pipe-kerf">Kerf loss: 3 mm × {{ p.num_cuts }} = {{ "%.2f"|format(p.kerf_mm) }} mm</div>
           <div class="multi-pipe-used">Used: {{ "%.2f"|format(p.used) }} mm</div>
           <div class="multi-pipe-scrap">Scrap: {{ "%.2f"|format(p.scrap) }} mm ({{ p.scrap_class }})</div>

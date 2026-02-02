@@ -103,6 +103,36 @@ def insert_leftover(length):
         _close_sync(conn)
 
 
+def delete_leftovers_batch(ids):
+    """Delete multiple leftovers by id in one transaction. ids: list of int."""
+    if not ids:
+        return
+    conn = get_db()
+    try:
+        placeholders = ",".join("?" * len(ids))
+        conn.execute("DELETE FROM leftovers WHERE id IN ({})".format(placeholders), ids)
+        conn.commit()
+        if _USE_TURSO and hasattr(conn, "sync"):
+            conn.sync()
+    finally:
+        _close_sync(conn)
+
+
+def insert_leftovers_batch(lengths):
+    """Insert multiple leftover lengths in one transaction. lengths: list of float."""
+    if not lengths:
+        return
+    conn = get_db()
+    try:
+        for length in lengths:
+            conn.execute("INSERT INTO leftovers (length) VALUES (?)", (round(length, 2),))
+        conn.commit()
+        if _USE_TURSO and hasattr(conn, "sync"):
+            conn.sync()
+    finally:
+        _close_sync(conn)
+
+
 def clear_all_leftovers():
     """Delete all rows from leftovers table (local SQLite or Turso)."""
     conn = get_db()

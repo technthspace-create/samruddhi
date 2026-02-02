@@ -356,6 +356,16 @@ button:hover {
   color: #666;
 }
 
+.multi-last-pipe-warning {
+  margin: 0 0 1rem;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.9rem;
+  background: #fef3cd;
+  border: 1px solid #f0c674;
+  border-radius: 4px;
+  color: #856404;
+}
+
 .multi-pipes {
   display: flex;
   flex-direction: column;
