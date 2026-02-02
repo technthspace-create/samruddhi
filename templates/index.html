@@ -68,6 +68,10 @@
     <section class="card inventory-card">
       <h2>Leftover inventory</h2>
       {% if inventory %}
+      <form method="post" action="{{ url_for('index') }}" class="clear-inventory-form" onsubmit="return confirm('Clear all leftover pieces from inventory? This cannot be undone.');">
+        <input type="hidden" name="clear_inventory" value="1">
+        <button type="submit" class="btn-clear-inventory">Clear all inventory</button>
+      </form>
       <table class="inventory-table">
         <thead>
           <tr>

@@ -7,7 +7,7 @@ Extended: Multi-size cutting plan (FFD bin packing) with standard raw length 360
 """
 
 import os
-from flask import Flask, render_template, request
+from flask import Flask, redirect, render_template, request
 
 import db
 
@@ -43,6 +43,7 @@ def classify_scrap_mm(scrap_mm):
 get_leftovers_sorted = db.get_leftovers_sorted
 delete_leftover = db.delete_leftover
 insert_leftover = db.insert_leftover
+clear_all_leftovers = db.clear_all_leftovers
 init_db = db.init_db
 
 
@@ -246,6 +247,9 @@ def index():
     multi_result = None
 
     if request.method == "POST":
+        if request.form.get("clear_inventory"):
+            clear_all_leftovers()
+            return redirect(request.url)
         if request.form.get("multi_submit"):
             # Multi-size cutting plan (FFD, 3600 mm standard raw)
             cut_lengths = request.form.getlist("multi_cut_length")
@@ -303,5 +307,5 @@ def index():
 
 if __name__ == "__main__":
     init_db()
-    # Use 5001 if 5000 is taken (e.g. by macOS AirPlay Receiver)
-    app.run(host="127.0.0.1", port=5001, debug=False)
+    # Use 5002 (5000/5001 often taken by macOS AirPlay or previous run)
+    app.run(host="127.0.0.1", port=5002, debug=False)

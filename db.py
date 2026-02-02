@@ -101,3 +101,15 @@ def insert_leftover(length):
             conn.sync()
     finally:
         _close_sync(conn)
+
+
+def clear_all_leftovers():
+    """Delete all rows from leftovers table (local SQLite or Turso)."""
+    conn = get_db()
+    try:
+        conn.execute("DELETE FROM leftovers")
+        conn.commit()
+        if _USE_TURSO and hasattr(conn, "sync"):
+            conn.sync()
+    finally:
+        _close_sync(conn)
